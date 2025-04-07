@@ -24,4 +24,4 @@
         image: vigneshwar1908/insure-me:v2
         state: started
         ports:
-          - "8081:8081"
+          - "8082:8082"
