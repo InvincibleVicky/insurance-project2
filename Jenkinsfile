@@ -1,65 +1,79 @@
-node{
+pipeline {
+    agent any
     
-    def mavenHome
-    def mavenCMD
-    def docker
-    def dockerCMD
-    def tagName
-    
-    stage('prepare enviroment'){
-        echo 'initialize all the variables'
-        mavenHome = tool name: 'maven' , type: 'maven'
-        mavenCMD = "${mavenHome}/bin/mvn"
-        docker = tool name: 'docker' , type: 'org.jenkinsci.plugins.docker.commons.tools.DockerTool'
-        dockerCMD = "${docker}/bin/docker"
-        tagName="3.0"
-    }
-    
-    stage('git code checkout'){
-        try{
-            echo 'checkout the code from git repository'
-            git 'https://github.com/shubhamkushwah123/star-agile-insurance-project.git'
+    stages {
+        stage("Git Checkout") {
+            steps {
+                echo "Cloning Git Repo"
+                git url: "https://github.com/InvincibleVicky/insurance-project/"
+            }
         }
-        catch(Exception e){
-            echo 'Exception occured in Git Code Checkout Stage'
-            currentBuild.result = "FAILURE"
-            emailext body: '''Dear All,
-            The Jenkins job ${JOB_NAME} has been failed. Request you to please have a look at it immediately by clicking on the below link. 
-            ${BUILD_URL}''', subject: 'Job ${JOB_NAME} ${BUILD_NUMBER} is failed', to: 'shubham@gmail.com'
+
+        stage("Compile the Code") {
+            steps {
+                echo "Starting Compilation"
+                sh "mvn compile"
+            }
         }
-    }
-    
-    stage('Build the Application'){
-        echo "Cleaning... Compiling...Testing... Packaging..."
-        //sh 'mvn clean package'
-        sh "${mavenCMD} clean package"        
-    }
-    
-    stage('publish test reports'){
-        publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: '/var/lib/jenkins/workspace/Capstone-Project-Live-Demo/target/surefire-reports', reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: '', useWrapperFileDirectly: true])
-    }
-    
-    stage('Containerize the application'){
-        echo 'Creating Docker image'
-        sh "${dockerCMD} build -t shubhamkushwah123/insure-me:${tagName} ."
-    }
-    
-    stage('Pushing it ot the DockerHub'){
-        echo 'Pushing the docker image to DockerHub'
-        withCredentials([string(credentialsId: 'dock-password', variable: 'dockerHubPassword')]) {
-        sh "${dockerCMD} login -u shubhamkushwah123 -p ${dockerHubPassword}"
-        sh "${dockerCMD} push shubhamkushwah123/insure-me:${tagName}"
-            
+
+        stage("Test the Code") {
+            steps {
+                echo "Starting Testing"
+                sh "mvn test"
+            }
+        }
+
+        stage("QA of the Code") {
+            steps {
+                echo "Starting Compilation"
+                sh "mvn checkstyle:checkstyle"
+            }
+        }
+
+        stage("Create a Package") {
+            steps {
+                echo "Packaging Application"
+                sh "mvn package"
+            }
         }
         
-    stage('Configure and Deploy to the test-server'){
-        ansiblePlaybook become: true, credentialsId: 'ansible-key', disableHostKeyChecking: true, installation: 'ansible', inventory: '/etc/ansible/hosts', playbook: 'ansible-playbook.yml'
-    }
+        stage('Publish the HTML Reports') {
+             steps {
+              publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, 
+                       reportDir: '/var/lib/jenkins/workspace/insure-me/target/surefire-reports',
+                       reportFiles: 'index.html', reportName: 'HTML Report', reportTitles: '', 
+                       useWrapperFileDirectly: true])
+            }
+        }
+
+        stage('Create a Docker image from the Package Insure-Me.jar file') {
+            steps {
+                sh 'docker build -t vigneshwar1908/insure-me:v2 .'
+            }
+        }
         
+        stage('Login to Dockerhub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerlogin', passwordVariable: 'dockerpass', usernameVariable: 'dockeruser')]) {
+                sh 'docker login -u ${dockeruser} -p ${dockerpass}'                                                       }
+            }
+        }
         
+        stage('Push the Docker image') {
+            steps {
+                sh 'docker push vigneshwar1908/insure-me:v2'
+            }
+        }
+
+        stage('Ansbile config and Deployment') {
+            steps {
+                ansiblePlaybook credentialsId: 'ansible-ssh',
+                    disableHostKeyChecking: true,
+                    installation: 'ansible',
+                    inventory: '/etc/ansible/hosts', 
+                    playbook: 'ansible-playbook.yml', vaultTmpPath: ''
+            }
+        }
+
     }
 }
-
-
-
-
