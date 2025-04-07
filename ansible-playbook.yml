@@ -1,20 +1,27 @@
-- name : Configure Docker on EC2 Instances
-  hosts : all
+---
+- name: Configure Docker on EC2 Instances
+  hosts: all
   become: true
-  connection : ssh
-  tasks : 
-  - name: updating apt
-    command : sudo apt-get update
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-  - name : Install Docker
-    command : sudo apt-get install -y docker.io
-    become : yes
-    become_user : root
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
 
-  - name : Start Docker Service
-    command : sudo systemctl start docker
-    become : yes
-    become_user : root
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
 
-  - name: Deploy Docker Container
-    command: docker run -itd -p 8084:8081 shubhamkushwah123/insure-me:3.0
+    - name: Deploy Docker container
+      docker_container:
+        name: insurance-app
+        image: vigneshwar1908/insure-me:v2
+        state: started
+        ports:
+          - "8081:8081"
